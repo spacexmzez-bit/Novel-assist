@@ -1,7 +1,7 @@
 /* File: api-client.js */
 const ApiClient = (function () {
   // Replace this with your actual Cloudflare Worker URL
-  const WORKER_BASE = "https://novalista-worker.<your-subdomain>.workers.dev";
+  const WORKER_BASE = "https://novalist.spacexmzez.workers.dev/";
 
   function getToken() {
     return localStorage.getItem("novel_token");
