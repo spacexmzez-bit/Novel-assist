@@ -1,9 +1,0 @@
-name = "novalista"
-pages_build_output_dir = "public"
-compatibility_date = "2026-09-22"
-
-# Cloudflare KV Namespace binding
-# Run 'npx wrangler kv:namespace create NOVEL_STORE' to get your KV ID
-[[kv_namespaces]]
-binding = "NOVEL_STORE"
-id = "29f55130835b4d169227da27cf4e3943"
