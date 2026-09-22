@@ -6,4 +6,4 @@ compatibility_date = "2026-09-22"
 # Run 'npx wrangler kv:namespace create NOVEL_STORE' to get your KV ID
 [[kv_namespaces]]
 binding = "NOVEL_STORE"
-id = "YOUR_KV_NAMESPACE_ID"
+id = "29f55130835b4d169227da27cf4e3943"
