@@ -1,0 +1,39 @@
+<!-- Floating Trigger Button -->
+<button id="aiDrawerOpenBtn" class="chat-trigger-btn" type="button" title="Open Novel Writing Assistant" aria-label="Open Novel Writing Assistant">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    <path d="M8 10h.01"></path>
+    <path d="M12 10h.01"></path>
+    <path d="M16 10h.01"></path>
+  </svg>
+</button>
+
+<!-- Slide-out Chat Drawer -->
+<aside id="aiChatDrawer" class="chat-drawer" aria-label="AI Writing Assistant Drawer">
+  <div class="chat-header">
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <span style="font-size: 1.25rem;">✨</span>
+      <div>
+        <div style="font-weight: 700; font-size: 0.95rem;">Storytelling Expert</div>
+        <div id="aiActiveModelLabel" style="font-size: 0.7rem; color: var(--text-muted);">gemini-2.5-flash-lite</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <button id="clearChatHistoryBtn" class="btn btn-secondary btn-sm" type="button" title="Clear Chat History">Clear</button>
+      <button id="aiDrawerCloseBtn" class="btn btn-secondary btn-sm" type="button" aria-label="Close Assistant">✕</button>
+    </div>
+  </div>
+
+  <div id="aiChatMessages" class="chat-messages">
+    <!-- Messages appended dynamically -->
+  </div>
+
+  <div id="aiOverviewWarning" style="display: none; padding: 0.75rem 1rem; background-color: rgba(245, 158, 11, 0.15); border-top: 1px solid var(--accent-warning); color: var(--accent-warning); font-size: 0.75rem;">
+    ⚠️ Context locked: Your novel overview has fewer than 500 words. Update it in the dashboard to enable full assistant context.
+  </div>
+
+  <form id="aiChatForm" class="chat-input-area">
+    <textarea id="aiChatInput" rows="1" placeholder="Ask about narrative pacing, scene craft, or voice..." style="resize: none;"></textarea>
+    <button id="aiChatSendBtn" type="submit" class="btn btn-primary btn-sm">Send</button>
+  </form>
+</aside>
