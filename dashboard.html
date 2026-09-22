@@ -1,11 +1,11 @@
-<!-- dashboard.html -->
+<!-- File: dashboard.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Novel Dashboard</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="./style.css">
   <style>
     .dashboard-header {
       display: flex;
@@ -114,7 +114,7 @@
 
   <header class="navbar">
     <div style="display: flex; align-items: center; gap: 1rem;">
-      <a href="/index.html" class="btn btn-secondary btn-sm">← Back to Hub</a>
+      <a href="./index.html" class="btn btn-secondary btn-sm">← Back to Hub</a>
       <span style="font-weight: 700;" id="navNovelTitle">Loading...</span>
     </div>
     <div class="navbar-actions">
@@ -209,18 +209,14 @@
     </div>
   </div>
 
+  <script src="./api-client.js"></script>
   <script>
     // Query parameters & auth check
-    const params = new URLSearchParams(window.location.search);
-    const novelId = params.get("id") || localStorage.getItem("active_novel_id");
-    const token = localStorage.getItem("novel_token");
+    const novelId = ApiClient.getNovelId();
+    const token = ApiClient.getToken();
 
-    if (!token) {
-      window.location.href = "/index.html";
-    }
-
-    if (!novelId) {
-      window.location.href = "/index.html";
+    if (!token || !novelId) {
+      window.location.href = "./index.html";
     }
 
     // Persist active novel ID
@@ -249,14 +245,14 @@
     const saveApiKeyBtn = document.getElementById("saveApiKeyBtn");
     const keyStatusMessage = document.getElementById("keyStatusMessage");
 
-    // Set tool links
-    bodyLink.href = `/editor.html?id=${novelId}`;
-    charactersLink.href = `/characters.html?id=${novelId}`;
-    timelineLink.href = `/timeline.html?id=${novelId}`;
+    // Set tool links using relative root paths
+    bodyLink.href = `./editor.html?id=${novelId}`;
+    charactersLink.href = `./characters.html?id=${novelId}`;
+    timelineLink.href = `./timeline.html?id=${novelId}`;
 
     // Helper: Calculate word count
     function getWordCount(text) {
-      return text.trim().split(/\s+/).filter(Boolean).length;
+      return (text || "").trim().split(/\s+/).filter(Boolean).length;
     }
 
     // Update word counter UI
@@ -271,23 +267,13 @@
       }
     }
 
-    // Fetch novel details
+    // Fetch novel details via ApiClient
     async function fetchNovel() {
       try {
-        const res = await fetch(`/api/novels?id=${novelId}`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-
-        if (res.status === 401) {
-          localStorage.removeItem("novel_token");
-          window.location.href = "/index.html";
-          return;
-        }
-
-        const data = await res.json();
-        if (!res.ok || !data.novel) {
+        const data = await ApiClient.get(`/api/novels?id=${novelId}`);
+        if (!data || !data.novel) {
           alert("Novel not found.");
-          window.location.href = "/index.html";
+          window.location.href = "./index.html";
           return;
         }
 
@@ -318,22 +304,10 @@
       overviewSaveStatus.textContent = "";
 
       try {
-        const res = await fetch("/api/novels", {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            id: novelId,
-            overview: overviewInput.value,
-          }),
+        await ApiClient.put("/api/novels", {
+          id: novelId,
+          overview: overviewInput.value,
         });
-
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || "Failed to update overview.");
-        }
 
         overviewSaveStatus.textContent = "Saved successfully!";
         overviewSaveStatus.style.color = "var(--accent-success)";
@@ -353,18 +327,9 @@
       if (!confirmed) return;
 
       try {
-        const res = await fetch(`/api/novels?id=${novelId}`, {
-          method: "DELETE",
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || "Failed to delete novel.");
-        }
-
+        await ApiClient.delete(`/api/novels?id=${novelId}`);
         localStorage.removeItem("active_novel_id");
-        window.location.href = "/index.html";
+        window.location.href = "./index.html";
       } catch (err) {
         alert("Error: " + err.message);
       }
@@ -397,22 +362,10 @@
       saveApiKeyBtn.textContent = "Saving...";
 
       try {
-        const res = await fetch("/api/auth", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            action: "save_api_key",
-            apiKey: key,
-          }),
+        await ApiClient.post("/api/auth", {
+          action: "save_api_key",
+          apiKey: key,
         });
-
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || "Failed to save API key.");
-        }
 
         keyStatusMessage.textContent = "API key synced successfully!";
         keyStatusMessage.style.color = "var(--accent-success)";
