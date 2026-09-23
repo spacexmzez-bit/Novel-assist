@@ -1,7 +1,7 @@
 /* File: api-client.js */
 const ApiClient = (function () {
   // Cloudflare Worker Base URL
-  const WORKER_BASE = "https://novalista-worker.spacexmzez-bit.workers.dev";
+  const WORKER_BASE = "https://novalist.spacexmzez.workers.dev";
 
   function getToken() {
     return localStorage.getItem("novel_token");
