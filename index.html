@@ -211,7 +211,6 @@
 
   <script src="./api-client.js"></script>
   <script>
-    // State variables
     let activeAuthMode = "login";
     let base64CoverData = null;
 
@@ -243,7 +242,6 @@
     const createNovelError = document.getElementById("createNovelError");
     const saveNovelBtn = document.getElementById("saveNovelBtn");
 
-    // Client-side SHA-256 helper
     async function sha256(str) {
       const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
       return Array.from(new Uint8Array(buf))
@@ -304,6 +302,11 @@
         return;
       }
 
+      if (password.length < 6) {
+        showAuthError("Password must be at least 6 characters.");
+        return;
+      }
+
       authSubmitBtn.disabled = true;
       authSubmitBtn.textContent = "Processing...";
 
@@ -318,7 +321,7 @@
         setSession(data.token, data.username);
         initView();
       } catch (err) {
-        showAuthError(err.message);
+        showAuthError(err.message || "An authentication error occurred.");
       } finally {
         authSubmitBtn.disabled = false;
         authSubmitBtn.textContent = activeAuthMode === "login" ? "Log In" : "Register";
