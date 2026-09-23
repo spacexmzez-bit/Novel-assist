@@ -1,7 +1,7 @@
 /* File: api-client.js */
 const ApiClient = (function () {
-  // Replace this with your actual Cloudflare Worker URL
-  const WORKER_BASE = "https://novalist.spacexmzez.workers.dev/";
+  // Cloudflare Worker Base URL
+  const WORKER_BASE = "https://novalista-worker.spacexmzez-bit.workers.dev";
 
   function getToken() {
     return localStorage.getItem("novel_token");
@@ -12,6 +12,40 @@ const ApiClient = (function () {
     return params.get("id") || localStorage.getItem("active_novel_id");
   }
 
+  function buildUrl(endpoint) {
+    if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
+      return endpoint;
+    }
+    // Normalize slashes to prevent "devapi" or double slashes "dev//api"
+    const base = WORKER_BASE.replace(/\/+$/, "");
+    const path = endpoint.replace(/^\/+/, "");
+    return `${base}/${path}`;
+  }
+
+  async function parseResponseBody(response) {
+    // 204 No Content or zero Content-Length headers have no body
+    if (response.status === 204 || response.headers.get("content-length") === "0") {
+      return null;
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      try {
+        return await response.json();
+      } catch (_) {
+        return null;
+      }
+    }
+
+    // Fallback for non-JSON or plain text responses
+    try {
+      const text = await response.text();
+      return text ? { message: text } : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   async function request(endpoint, options = {}) {
     const token = getToken();
     const headers = {
@@ -19,7 +53,9 @@ const ApiClient = (function () {
       ...(options.headers || {}),
     };
 
-    if (token) {
+    // Avoid sending stale Bearer tokens to authentication endpoints
+    const isAuthRoute = endpoint.includes("/api/auth");
+    if (token && !isAuthRoute) {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
@@ -28,23 +64,38 @@ const ApiClient = (function () {
       headers,
     };
 
-    const targetUrl = endpoint.startsWith("http") ? endpoint : `${WORKER_BASE}${endpoint}`;
+    const targetUrl = buildUrl(endpoint);
 
     try {
       const response = await fetch(targetUrl, config);
+      const data = await parseResponseBody(response);
 
       if (response.status === 401) {
-        localStorage.removeItem("novel_token");
-        localStorage.removeItem("active_novel_id");
-        window.location.href = "./index.html";
-        throw new Error("Session expired or unauthorized.");
+        // Prevent redirect loops on login/landing pages and auth endpoints
+        const currentPath = window.location.pathname;
+        const isIndexPage =
+          currentPath.endsWith("index.html") ||
+          currentPath === "/" ||
+          currentPath === "";
+
+        if (!isAuthRoute && !isIndexPage) {
+          localStorage.removeItem("novel_token");
+          localStorage.removeItem("active_novel_id");
+          window.location.href = "./index.html";
+        }
+
+        const errorMsg =
+          (data && data.error) || "Invalid credentials or unauthorized.";
+        throw new Error(errorMsg);
       }
 
-      const data = await response.json();
-
       if (!response.ok) {
-        const err = new Error(data.error || `Request failed with status ${response.status}`);
-        err.requiresOverview = Boolean(data.requiresOverview);
+        const errorMsg =
+          (data && data.error) || `Request failed with status ${response.status}`;
+        const err = new Error(errorMsg);
+        err.requiresOverview = Boolean(data && data.requiresOverview);
+        err.status = response.status;
+        err.data = data;
         throw err;
       }
 
@@ -60,8 +111,16 @@ const ApiClient = (function () {
     getToken,
     getNovelId,
     get: (endpoint) => request(endpoint, { method: "GET" }),
-    post: (endpoint, body) => request(endpoint, { method: "POST", body: JSON.stringify(body) }),
-    put: (endpoint, body) => request(endpoint, { method: "PUT", body: JSON.stringify(body) }),
+    post: (endpoint, body) =>
+      request(endpoint, {
+        method: "POST",
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      }),
+    put: (endpoint, body) =>
+      request(endpoint, {
+        method: "PUT",
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      }),
     delete: (endpoint) => request(endpoint, { method: "DELETE" }),
   };
 })();
