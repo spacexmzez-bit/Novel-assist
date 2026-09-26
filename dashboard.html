@@ -15,6 +15,7 @@
       margin-bottom: 2rem;
       padding-bottom: 1.5rem;
       border-bottom: 1px solid var(--border-color);
+      flex-wrap: wrap;
     }
     .novel-meta-container {
       display: flex;
@@ -101,12 +102,23 @@
     .word-counter-badge.invalid {
       color: var(--accent-warning);
     }
-    .byok-settings-card {
-      margin-top: 1.5rem;
-      padding: 1.25rem;
-      background-color: var(--bg-card);
+    .export-option-box {
+      background-color: var(--bg-primary);
       border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .export-option-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      margin-bottom: 0.25rem;
+      color: var(--text-main);
+    }
+    .export-option-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
     }
   </style>
 </head>
@@ -118,6 +130,7 @@
       <span style="font-weight: 700;" id="navNovelTitle">Loading...</span>
     </div>
     <div class="navbar-actions">
+      <button id="openExportModalBtn" class="btn btn-secondary btn-sm" title="Export Manuscript or Backup">💾 Export & Backup</button>
       <button id="openKeySettingsBtn" class="btn btn-secondary btn-sm">🔑 API Key Settings</button>
       <button id="deleteNovelBtn" class="btn btn-danger btn-sm">Delete Novel</button>
     </div>
@@ -142,7 +155,7 @@
         <div>
           <div class="tool-icon">📝</div>
           <div class="tool-title">Novel Body</div>
-          <div class="tool-desc">Draft and organize your story across chapters with distraction-free writing and search.</div>
+          <div class="tool-desc">Draft and organize your story across chapters with autosave, distraction-free writing, and AI quoting.</div>
         </div>
         <span class="btn btn-secondary btn-sm" style="width: 100%;">Open Writer</span>
       </a>
@@ -187,6 +200,42 @@
     </div>
   </main>
 
+  <!-- Export & Backup Modal -->
+  <div id="exportModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 550px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span style="font-size: 1.25rem;">💾</span>
+          <h3 style="margin: 0;">Export & Backup</h3>
+        </div>
+        <button id="closeExportModalBtn" class="btn btn-secondary btn-sm" type="button">✕</button>
+      </div>
+
+      <!-- JSON Project Backup -->
+      <div class="export-option-box">
+        <div class="export-option-title">Full Project Archive (.json)</div>
+        <div class="export-option-desc">
+          Downloads the complete project bundle including metadata, story overview, all chapters, character profiles, and timeline events. Can be restored anytime via the Hub.
+        </div>
+        <button id="exportJsonBtn" type="button" class="btn btn-primary btn-sm">Download Backup (.json)</button>
+      </div>
+
+      <!-- Manuscript Compilation -->
+      <div class="export-option-box">
+        <div class="export-option-title">Compiled Manuscript</div>
+        <div class="export-option-desc">
+          Compiles all novel chapters sequentially into a clean, ready-to-read manuscript file with standard chapter divisions.
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button id="exportMarkdownBtn" type="button" class="btn btn-secondary btn-sm">Markdown (.md)</button>
+          <button id="exportTextBtn" type="button" class="btn btn-secondary btn-sm">Plain Text (.txt)</button>
+        </div>
+      </div>
+
+      <div id="exportStatusMessage" style="font-size: 0.8rem; margin-top: 0.5rem; display: none;"></div>
+    </div>
+  </div>
+
   <!-- BYOK API Key Modal -->
   <div id="keyModal" class="modal-overlay">
     <div class="modal-content">
@@ -222,6 +271,8 @@
     // Persist active novel ID
     localStorage.setItem("active_novel_id", novelId);
 
+    let currentNovelData = null;
+
     // DOM Elements
     const navNovelTitle = document.getElementById("navNovelTitle");
     const novelTitle = document.getElementById("novelTitle");
@@ -244,6 +295,15 @@
     const apiKeyInput = document.getElementById("apiKeyInput");
     const saveApiKeyBtn = document.getElementById("saveApiKeyBtn");
     const keyStatusMessage = document.getElementById("keyStatusMessage");
+
+    // Export Modal Elements
+    const openExportModalBtn = document.getElementById("openExportModalBtn");
+    const closeExportModalBtn = document.getElementById("closeExportModalBtn");
+    const exportModal = document.getElementById("exportModal");
+    const exportJsonBtn = document.getElementById("exportJsonBtn");
+    const exportMarkdownBtn = document.getElementById("exportMarkdownBtn");
+    const exportTextBtn = document.getElementById("exportTextBtn");
+    const exportStatusMessage = document.getElementById("exportStatusMessage");
 
     // Set tool links using relative root paths
     bodyLink.href = `./editor.html?id=${novelId}`;
@@ -277,14 +337,14 @@
           return;
         }
 
-        const novel = data.novel;
-        navNovelTitle.textContent = novel.title;
-        novelTitle.textContent = novel.title;
-        novelDescription.textContent = novel.description || "No description provided.";
-        overviewInput.value = novel.overview || "";
+        currentNovelData = data.novel;
+        navNovelTitle.textContent = currentNovelData.title;
+        novelTitle.textContent = currentNovelData.title;
+        novelDescription.textContent = currentNovelData.description || "No description provided.";
+        overviewInput.value = currentNovelData.overview || "";
 
-        if (novel.coverBase64) {
-          coverWrapper.innerHTML = `<img class="novel-dashboard-cover" src="${novel.coverBase64}" alt="${novel.title}">`;
+        if (currentNovelData.coverBase64) {
+          coverWrapper.innerHTML = `<img class="novel-dashboard-cover" src="${currentNovelData.coverBase64}" alt="${currentNovelData.title}">`;
         } else {
           coverWrapper.innerHTML = `<div class="novel-dashboard-placeholder">No Cover Image</div>`;
         }
@@ -383,6 +443,144 @@
         saveApiKeyBtn.textContent = "Save Key";
       }
     });
+
+    // ==========================================
+    // Export & Backup Functionality
+    // ==========================================
+    openExportModalBtn.addEventListener("click", () => {
+      exportStatusMessage.style.display = "none";
+      exportModal.classList.add("active");
+    });
+
+    function closeExportModal() {
+      exportModal.classList.remove("active");
+    }
+    closeExportModalBtn.addEventListener("click", closeExportModal);
+
+    function triggerDownload(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function sanitizeFilename(name) {
+      return (name || "novel").toLowerCase().replace(/[^a-z0-9_-]/g, "_").slice(0, 40);
+    }
+
+    async function fetchFullNovelPackage() {
+      const [novelRes, chaptersRes, charRes, timeRes] = await Promise.all([
+        ApiClient.get(`/api/novels?id=${novelId}`),
+        ApiClient.get(`/api/content?novelId=${novelId}&type=chapters`),
+        ApiClient.get(`/api/content?novelId=${novelId}&type=characters`),
+        ApiClient.get(`/api/content?novelId=${novelId}&type=timeline`)
+      ]);
+
+      const chapters = (chaptersRes.items || []).sort((a, b) => (a.order || 0) - (b.order || 0));
+      const characters = charRes.items || [];
+      const timeline = (timeRes.items || []).sort((a, b) => (a.order || 0) - (b.order || 0));
+
+      return {
+        novel: novelRes.novel,
+        chapters,
+        characters,
+        timeline,
+        exportedAt: new Date().toISOString(),
+        version: "1.0"
+      };
+    }
+
+    // JSON Backup Export
+    exportJsonBtn.addEventListener("click", async () => {
+      exportJsonBtn.disabled = true;
+      exportJsonBtn.textContent = "Packaging...";
+      exportStatusMessage.style.display = "none";
+
+      try {
+        const pkg = await fetchFullNovelPackage();
+        const jsonStr = JSON.stringify(pkg, null, 2);
+        const fileName = `${sanitizeFilename(pkg.novel?.title)}_backup.json`;
+        triggerDownload(jsonStr, fileName, "application/json");
+
+        exportStatusMessage.textContent = "Backup downloaded successfully!";
+        exportStatusMessage.style.color = "var(--accent-success)";
+        exportStatusMessage.style.display = "block";
+      } catch (err) {
+        exportStatusMessage.textContent = `Export failed: ${err.message}`;
+        exportStatusMessage.style.color = "var(--accent-danger)";
+        exportStatusMessage.style.display = "block";
+      } finally {
+        exportJsonBtn.disabled = false;
+        exportJsonBtn.textContent = "Download Backup (.json)";
+      }
+    });
+
+    // Manuscript Compilers (Markdown / Text)
+    async function compileManuscript(format) {
+      const btn = format === "markdown" ? exportMarkdownBtn : exportTextBtn;
+      btn.disabled = true;
+      btn.textContent = "Compiling...";
+      exportStatusMessage.style.display = "none";
+
+      try {
+        const pkg = await fetchFullNovelPackage();
+        const title = pkg.novel?.title || "Untitled Novel";
+        const chapters = pkg.chapters || [];
+
+        let output = "";
+        const isMd = format === "markdown";
+
+        if (isMd) {
+          output += `# ${title}\n\n`;
+          if (pkg.novel?.description) {
+            output += `> ${pkg.novel.description}\n\n`;
+          }
+          output += `---\n\n`;
+
+          chapters.forEach((ch, idx) => {
+            output += `## Chapter ${idx + 1}: ${ch.title || "Untitled"}\n\n`;
+            output += `${ch.body || ""}\n\n`;
+            output += `---\n\n`;
+          });
+        } else {
+          output += `${title.toUpperCase()}\n`;
+          if (pkg.novel?.description) {
+            output += `${pkg.novel.description}\n`;
+          }
+          output += `=========================================\n\n`;
+
+          chapters.forEach((ch, idx) => {
+            output += `CHAPTER ${idx + 1}: ${(ch.title || "UNTITLED").toUpperCase()}\n`;
+            output += `-----------------------------------------\n\n`;
+            output += `${ch.body || ""}\n\n\n`;
+          });
+        }
+
+        const ext = isMd ? "md" : "txt";
+        const mime = isMd ? "text/markdown" : "text/plain";
+        const fileName = `${sanitizeFilename(title)}_manuscript.${ext}`;
+        triggerDownload(output, fileName, mime);
+
+        exportStatusMessage.textContent = `Manuscript (.${ext}) downloaded!`;
+        exportStatusMessage.style.color = "var(--accent-success)";
+        exportStatusMessage.style.display = "block";
+      } catch (err) {
+        exportStatusMessage.textContent = `Compilation failed: ${err.message}`;
+        exportStatusMessage.style.color = "var(--accent-danger)";
+        exportStatusMessage.style.display = "block";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = format === "markdown" ? "Markdown (.md)" : "Plain Text (.txt)";
+      }
+    }
+
+    exportMarkdownBtn.addEventListener("click", () => compileManuscript("markdown"));
+    exportTextBtn.addEventListener("click", () => compileManuscript("text"));
 
     // Initialize
     document.addEventListener("DOMContentLoaded", fetchNovel);
