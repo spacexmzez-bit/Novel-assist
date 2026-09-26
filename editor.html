@@ -197,7 +197,7 @@
       <div class="editor-toolbar">
         <input type="text" id="chapterTitleInput" class="chapter-title-input" placeholder="Chapter Title">
         <div class="editor-actions">
-          <span id="saveIndicator" style="font-size: 0.8rem; color: var(--text-muted);">Synced</span>
+          <span id="saveIndicator" style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">All changes saved</span>
         </div>
       </div>
 
@@ -218,7 +218,7 @@
   <script src="./api-client.js"></script>
   <script src="./chatbot.js"></script>
   <script>
-    // Merged Editor UI & Storage Engine
+    // Merged Editor UI & Robust Autosave Engine
     (function () {
       const novelId = ApiClient.getNovelId();
       if (!novelId) {
@@ -251,8 +251,30 @@
       let chapters = [];
       let activeChapterId = null;
       let saveTimeout = null;
+      let isSavingInFlight = false;
       let searchMatches = [];
       let currentMatchIndex = -1;
+
+      // Global reference for selection-aware AI prompts
+      window.novalistaSelection = "";
+
+      // Continuous selection tracking on the writing canvas
+      function updateSelectionCache() {
+        const textarea = elements.chapterBody;
+        if (!textarea) return;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        if (typeof start === "number" && typeof end === "number" && start !== end) {
+          const selected = textarea.value.substring(start, end).trim();
+          if (selected) {
+            window.novalistaSelection = selected;
+          }
+        }
+      }
+
+      elements.chapterBody.addEventListener("mouseup", updateSelectionCache);
+      elements.chapterBody.addEventListener("keyup", updateSelectionCache);
+      elements.chapterBody.addEventListener("select", updateSelectionCache);
 
       // Render chapters in sidebar
       function renderChapters() {
@@ -276,26 +298,50 @@
         elements.statusCharCount.textContent = `${chars.toLocaleString()} characters`;
       }
 
-      // Set indicator state
+      // Save status indicator states
       function setSaveStatus(state) {
         if (state === "saving") {
           elements.saveIndicator.textContent = "Saving...";
           elements.saveIndicator.style.color = "var(--accent-warning)";
         } else if (state === "saved") {
-          elements.saveIndicator.textContent = "Synced";
+          elements.saveIndicator.textContent = "All changes saved";
           elements.saveIndicator.style.color = "var(--accent-success)";
-          elements.statusLastSaved.textContent = `Saved at ${new Date().toLocaleTimeString()}`;
+          elements.statusLastSaved.textContent = `Saved at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+        } else if (state === "offline") {
+          elements.saveIndicator.textContent = "Offline — Saved locally";
+          elements.saveIndicator.style.color = "var(--accent-warning)";
         } else if (state === "error") {
-          elements.saveIndicator.textContent = "Sync Error";
+          elements.saveIndicator.textContent = "Sync Error (Retrying...)";
           elements.saveIndicator.style.color = "var(--accent-danger)";
         }
       }
 
+      function getLocalDraftKey(chapterId) {
+        return `draft_${novelId}_${chapterId}`;
+      }
+
+      // Instant local persistence fail-safe
+      function writeLocalDraft(chapterId, title, body) {
+        if (!chapterId) return;
+        try {
+          localStorage.setItem(getLocalDraftKey(chapterId), JSON.stringify({
+            title,
+            body,
+            savedAt: Date.now()
+          }));
+        } catch (_) {}
+      }
+
+      function clearLocalDraft(chapterId) {
+        if (!chapterId) return;
+        localStorage.removeItem(getLocalDraftKey(chapterId));
+      }
+
       // Switch active chapter
-      function selectChapter(id) {
+      async function selectChapter(id) {
         if (saveTimeout) {
           clearTimeout(saveTimeout);
-          saveCurrentChapterImmediate();
+          await saveCurrentChapterImmediate();
         }
 
         activeChapterId = id;
@@ -304,9 +350,23 @@
         if (activeChapter) {
           elements.chapterTitleInput.disabled = false;
           elements.chapterBody.disabled = false;
+
+          // Check if there is an un-synced local draft newer than server version
+          const draftRaw = localStorage.getItem(getLocalDraftKey(id));
+          if (draftRaw) {
+            try {
+              const draft = JSON.parse(draftRaw);
+              if (draft.body && draft.body !== activeChapter.body) {
+                activeChapter.body = draft.body;
+                activeChapter.title = draft.title || activeChapter.title;
+              }
+            } catch (_) {}
+          }
+
           elements.chapterTitleInput.value = activeChapter.title || "";
           elements.chapterBody.value = activeChapter.body || "";
           updateStats(activeChapter.body || "");
+          setSaveStatus("saved");
         } else {
           elements.chapterTitleInput.disabled = true;
           elements.chapterBody.disabled = true;
@@ -358,27 +418,32 @@
         }
       }
 
-      // Save chapter payload to server
+      // Save chapter payload to Cloudflare KV
       async function saveCurrentChapterImmediate() {
-        if (!activeChapterId) return;
+        if (!activeChapterId || isSavingInFlight) return;
         const chapter = chapters.find((c) => c.id === activeChapterId);
         if (!chapter) return;
 
+        isSavingInFlight = true;
         setSaveStatus("saving");
+
         try {
           await ApiClient.put("/api/content", {
             novelId,
             type: "chapters",
             item: chapter,
           });
+          clearLocalDraft(activeChapterId);
           setSaveStatus("saved");
         } catch (err) {
-          console.error("Save error:", err);
-          setSaveStatus("error");
+          console.warn("Autosave network error, retained in local storage:", err.message);
+          setSaveStatus("offline");
+        } finally {
+          isSavingInFlight = false;
         }
       }
 
-      // Debounced auto-save
+      // Debounced auto-save handler (1.5 seconds)
       function triggerAutoSave() {
         if (!activeChapterId) return;
         const chapter = chapters.find((c) => c.id === activeChapterId);
@@ -388,6 +453,10 @@
         chapter.body = elements.chapterBody.value;
         updateStats(chapter.body);
 
+        // Immediate client-side fallback
+        writeLocalDraft(activeChapterId, chapter.title, chapter.body);
+
+        // Update list title dynamically
         const activeListItem = elements.chaptersList.querySelector(`.chapter-item.active`);
         if (activeListItem) {
           const idx = chapters.findIndex((c) => c.id === activeChapterId);
@@ -396,7 +465,7 @@
 
         setSaveStatus("saving");
         clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(saveCurrentChapterImmediate, 800);
+        saveTimeout = setTimeout(saveCurrentChapterImmediate, 1500);
       }
 
       // Delete active chapter
@@ -413,6 +482,7 @@
         const idToDelete = activeChapterId;
         try {
           await ApiClient.delete(`/api/content?novelId=${novelId}&type=chapters&itemId=${idToDelete}`);
+          clearLocalDraft(idToDelete);
           chapters = chapters.filter((c) => c.id !== idToDelete);
           selectChapter(chapters[0].id);
         } catch (err) {
@@ -475,6 +545,7 @@
 
         elements.chapterBody.focus();
         elements.chapterBody.setSelectionRange(startPos, endPos);
+        updateSelectionCache();
       }
 
       // Keyboard shortcut Ctrl+F / Cmd+F inside editor
@@ -510,10 +581,16 @@
         }
       });
 
+      // Flushes unsaved modifications immediately if the window or tab is closed
       window.addEventListener("beforeunload", () => {
         if (saveTimeout) {
           clearTimeout(saveTimeout);
-          saveCurrentChapterImmediate();
+          if (activeChapterId) {
+            const ch = chapters.find((c) => c.id === activeChapterId);
+            if (ch) {
+              writeLocalDraft(activeChapterId, ch.title, ch.body);
+            }
+          }
         }
       });
 
