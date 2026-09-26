@@ -1,5 +1,5 @@
 /* chatbot.js */
-// Self-contained injection and controller for AI Assistant Drawer
+// Self-contained injection and controller for AI Assistant Drawer with Selection Quoting
 (function () {
   let conversationHistory = [];
   const token = localStorage.getItem("novel_token");
@@ -41,14 +41,22 @@
         ⚠️ Context locked: Your novel overview has fewer than 500 words. Update it in the dashboard to enable full assistant context.
       </div>
 
-      <form id="aiChatForm" class="chat-input-area">
-        <textarea id="aiChatInput" rows="1" placeholder="Ask about narrative pacing, scene craft, or voice..." style="resize: none;"></textarea>
-        <button id="aiChatSendBtn" type="submit" class="btn btn-primary btn-sm">Send</button>
+      <!-- Input Bar with Selection Quoting Action -->
+      <form id="aiChatForm" class="chat-input-area" style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <div style="display: flex; justify-content: flex-start;">
+          <button id="quoteSelectionBtn" type="button" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.6rem;" title="Import currently highlighted text from chapter">
+            📎 Quote Selection
+          </button>
+        </div>
+        <div style="display: flex; gap: 0.5rem; width: 100%;">
+          <textarea id="aiChatInput" rows="1" placeholder="Ask about narrative pacing, scene craft, or voice..." style="resize: none; flex: 1;"></textarea>
+          <button id="aiChatSendBtn" type="submit" class="btn btn-primary btn-sm" style="align-self: flex-end;">Send</button>
+        </div>
       </form>
     </aside>
   `;
 
-  // Inject Drawer HTML synchronously without runtime network fetch
+  // Inject Drawer HTML synchronously
   function injectDrawerComponent() {
     const root = document.createElement("div");
     root.id = "aiChatbotRoot";
@@ -69,6 +77,7 @@
     const clearBtn = document.getElementById("clearChatHistoryBtn");
     const modelLabel = document.getElementById("aiActiveModelLabel");
     const overviewWarning = document.getElementById("aiOverviewWarning");
+    const quoteSelectionBtn = document.getElementById("quoteSelectionBtn");
 
     // Load persisted local messages for active novel
     const storageKey = `chat_history_${novelId || "global"}`;
@@ -122,9 +131,32 @@
     });
 
     // Auto-expand textarea height
-    chatInput.addEventListener("input", () => {
+    function adjustInputHeight() {
       chatInput.style.height = "auto";
-      chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + "px";
+      chatInput.style.height = Math.min(chatInput.scrollHeight, 140) + "px";
+    }
+
+    chatInput.addEventListener("input", adjustInputHeight);
+
+    // Quote highlighted selection from writing canvas into the prompt
+    quoteSelectionBtn.addEventListener("click", () => {
+      let selectedText = window.novalistaSelection || "";
+
+      // Fallback: check DOM selection if window variable hasn't captured it yet
+      if (!selectedText && window.getSelection) {
+        selectedText = window.getSelection().toString().trim();
+      }
+
+      if (!selectedText) {
+        alert("Highlight a sentence or passage inside the chapter first, then click 'Quote Selection'.");
+        return;
+      }
+
+      const formattedQuote = `> "${selectedText}"\n\n`;
+      chatInput.value = formattedQuote + chatInput.value.replace(/^> ".*"\n\n/, "");
+      adjustInputHeight();
+      chatInput.focus();
+      chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
     });
 
     // Keydown submission (Enter to send, Shift+Enter for new line)
