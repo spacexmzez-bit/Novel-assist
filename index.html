@@ -14,6 +14,14 @@
       margin-bottom: 2rem;
       padding-bottom: 1rem;
       border-bottom: 1px solid var(--border-color);
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .hub-actions {
+      display: flex;
+      gap: 0.6rem;
+      align-items: center;
+      flex-wrap: wrap;
     }
     .novel-card {
       display: flex;
@@ -122,6 +130,51 @@
       display: none;
       border-radius: var(--radius-sm);
     }
+    /* Pitch Inspiration Modal Specifics */
+    .pitch-advanced-panel {
+      display: none;
+      padding: 1rem;
+      margin-top: 0.75rem;
+      background-color: var(--bg-primary);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-color);
+    }
+    .pitch-preview {
+      display: none;
+      margin-top: 1.25rem;
+      padding: 1rem;
+      background-color: var(--bg-primary);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-color);
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .pitch-preview h4 {
+      color: var(--accent-primary);
+      font-size: 1.1rem;
+      margin-bottom: 0.4rem;
+    }
+    .pitch-preview-logline {
+      font-style: italic;
+      color: var(--text-main);
+      font-size: 0.9rem;
+      margin-bottom: 0.75rem;
+    }
+    .pitch-preview-overview {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+      white-space: pre-wrap;
+      margin-bottom: 1rem;
+    }
+    .pitch-char-chip {
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 0.4rem 0.6rem;
+      margin-bottom: 0.4rem;
+      font-size: 0.8rem;
+    }
   </style>
 </head>
 <body>
@@ -165,7 +218,12 @@
           <h2>Your Novels</h2>
           <p style="color: var(--text-muted); font-size: 0.875rem;">Select a novel to enter its toolbox dashboard.</p>
         </div>
-        <button id="openCreateModalBtn" class="btn btn-primary">+ Create New Novel</button>
+        <div class="hub-actions">
+          <button id="openPitchModalBtn" class="btn btn-secondary" title="Get Story Ideas from AI">💡 Inspire Me</button>
+          <button id="importNovelTriggerBtn" class="btn btn-secondary" title="Restore project from .json">📥 Import Novel (.json)</button>
+          <input type="file" id="importNovelFileInput" accept=".json" style="display: none;">
+          <button id="openCreateModalBtn" class="btn btn-primary">+ Create New Novel</button>
+        </div>
       </div>
 
       <div id="novelsGrid" class="grid grid-cols-3">
@@ -174,7 +232,7 @@
 
       <div id="emptyNovels" class="empty-state" style="display: none;">
         <h3>No novels found</h3>
-        <p style="margin-top: 0.5rem;">Click "+ Create New Novel" above to start your first story.</p>
+        <p style="margin-top: 0.5rem;">Click "+ Create New Novel" or use "💡 Inspire Me" above to start your first story.</p>
       </div>
     </div>
   </main>
@@ -209,10 +267,95 @@
     </div>
   </div>
 
+  <!-- AI Story Pitch Inspiration Modal -->
+  <div id="pitchModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 620px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span style="font-size: 1.25rem;">💡</span>
+          <h3 style="margin: 0;">Story Pitch Inspiration</h3>
+        </div>
+        <button id="closePitchModalBtn" class="btn btn-secondary btn-sm" type="button">✕</button>
+      </div>
+
+      <div style="margin-bottom: 1rem;">
+        <p style="color: var(--text-muted); font-size: 0.85rem;">Let AI construct a complete novel concept, detailed synopsis, and seed cast for your next project.</p>
+      </div>
+
+      <!-- Advanced Filters Toggle -->
+      <div>
+        <button id="toggleAdvancedPitchBtn" type="button" class="btn btn-secondary btn-sm" style="margin-bottom: 0.75rem;">
+          ⚙️ Advanced Selection ▼
+        </button>
+
+        <div id="pitchAdvancedPanel" class="pitch-advanced-panel">
+          <div class="form-group" style="margin-bottom: 0.75rem;">
+            <label for="pitchGenre">Genre</label>
+            <select id="pitchGenre">
+              <option value="">Random / Mixed Genre</option>
+              <option value="Sci-Fi / Cyberpunk">Sci-Fi / Cyberpunk</option>
+              <option value="Epic Fantasy">Epic Fantasy</option>
+              <option value="Psychological Thriller">Psychological Thriller</option>
+              <option value="Mystery / Detective">Mystery / Detective</option>
+              <option value="Historical Fiction">Historical Fiction</option>
+              <option value="Dark Fantasy / Supernatural">Dark Fantasy / Supernatural</option>
+              <option value="Dystopian Adventure">Dystopian Adventure</option>
+            </select>
+          </div>
+          <div style="display: flex; gap: 0.75rem; margin-bottom: 0.75rem;">
+            <div class="form-group" style="flex: 1; margin-bottom: 0;">
+              <label for="pitchLength">Target Scope</label>
+              <select id="pitchLength">
+                <option value="Full-Length Novel (80k words)">Full-Length Novel</option>
+                <option value="Novella / Concise Arc">Novella</option>
+                <option value="Multi-Part Epic Series">Epic Series</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex: 1; margin-bottom: 0;">
+              <label for="pitchDepth">Depth & Complexity</label>
+              <select id="pitchDepth">
+                <option value="High (Multi-layered plot & moral grayness)">High (Layered & Gray)</option>
+                <option value="Balanced (Pacing-focused)">Balanced</option>
+                <option value="Character-Driven">Character-Driven</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="pitchCustomInstruction">Custom Direction (Optional)</label>
+            <input type="text" id="pitchCustomInstruction" placeholder="e.g., A detective who can read the memories of old buildings">
+          </div>
+        </div>
+      </div>
+
+      <!-- Generator Trigger Buttons -->
+      <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+        <button id="generatePitchBtn" type="button" class="btn btn-primary" style="flex: 1;">Generate Pitch</button>
+        <button id="randomPitchBtn" type="button" class="btn btn-secondary">🎲 Surprise Me</button>
+      </div>
+
+      <div id="pitchError" class="form-error" style="margin-top: 0.75rem;"></div>
+
+      <!-- Generated Pitch Preview Box -->
+      <div id="pitchPreview" class="pitch-preview">
+        <h4 id="previewTitle"></h4>
+        <div id="previewLogline" class="pitch-preview-logline"></div>
+        <div id="previewOverview" class="pitch-preview-overview"></div>
+        <div style="font-weight: 600; font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--text-main);">Seeded Characters:</div>
+        <div id="previewCharacters"></div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem;">
+          <button id="rerollPitchBtn" type="button" class="btn btn-secondary btn-sm">🔄 Re-roll</button>
+          <button id="approvePitchBtn" type="button" class="btn btn-primary btn-sm">✅ Approve & Create Novel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="./api-client.js"></script>
   <script>
     let activeAuthMode = "login";
     let base64CoverData = null;
+    let currentGeneratedPitch = null;
 
     // DOM Elements
     const authSection = document.getElementById("authSection");
@@ -241,6 +384,31 @@
     const coverPreview = document.getElementById("coverPreview");
     const createNovelError = document.getElementById("createNovelError");
     const saveNovelBtn = document.getElementById("saveNovelBtn");
+
+    // Pitch Inspiration Modal DOM
+    const openPitchModalBtn = document.getElementById("openPitchModalBtn");
+    const closePitchModalBtn = document.getElementById("closePitchModalBtn");
+    const pitchModal = document.getElementById("pitchModal");
+    const toggleAdvancedPitchBtn = document.getElementById("toggleAdvancedPitchBtn");
+    const pitchAdvancedPanel = document.getElementById("pitchAdvancedPanel");
+    const pitchGenre = document.getElementById("pitchGenre");
+    const pitchLength = document.getElementById("pitchLength");
+    const pitchDepth = document.getElementById("pitchDepth");
+    const pitchCustomInstruction = document.getElementById("pitchCustomInstruction");
+    const generatePitchBtn = document.getElementById("generatePitchBtn");
+    const randomPitchBtn = document.getElementById("randomPitchBtn");
+    const pitchError = document.getElementById("pitchError");
+    const pitchPreview = document.getElementById("pitchPreview");
+    const previewTitle = document.getElementById("previewTitle");
+    const previewLogline = document.getElementById("previewLogline");
+    const previewOverview = document.getElementById("previewOverview");
+    const previewCharacters = document.getElementById("previewCharacters");
+    const rerollPitchBtn = document.getElementById("rerollPitchBtn");
+    const approvePitchBtn = document.getElementById("approvePitchBtn");
+
+    // Import Trigger DOM
+    const importNovelTriggerBtn = document.getElementById("importNovelTriggerBtn");
+    const importNovelFileInput = document.getElementById("importNovelFileInput");
 
     async function sha256(str) {
       const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
@@ -405,6 +573,142 @@
       } finally {
         saveNovelBtn.disabled = false;
         saveNovelBtn.textContent = "Create Novel";
+      }
+    });
+
+    // ==========================================
+    // Story Pitch Inspiration Feature
+    // ==========================================
+    openPitchModalBtn.addEventListener("click", () => {
+      pitchError.style.display = "none";
+      pitchModal.classList.add("active");
+    });
+
+    closePitchModalBtn.addEventListener("click", () => {
+      pitchModal.classList.remove("active");
+    });
+
+    toggleAdvancedPitchBtn.addEventListener("click", () => {
+      const isVisible = pitchAdvancedPanel.style.display === "block";
+      pitchAdvancedPanel.style.display = isVisible ? "none" : "block";
+      toggleAdvancedPitchBtn.textContent = isVisible ? "⚙️ Advanced Selection ▼" : "⚙️ Advanced Selection ▲";
+    });
+
+    async function triggerPitchGeneration(isRandom = false) {
+      pitchError.style.display = "none";
+      generatePitchBtn.disabled = true;
+      randomPitchBtn.disabled = true;
+      generatePitchBtn.textContent = "Crafting pitch...";
+
+      const payload = isRandom
+        ? { genre: "", length: "Full-Length Novel", depth: "Balanced", customInstruction: "Surprise me with a unique narrative idea." }
+        : {
+            genre: pitchGenre.value,
+            length: pitchLength.value,
+            depth: pitchDepth.value,
+            customInstruction: pitchCustomInstruction.value.trim(),
+          };
+
+      try {
+        const res = await ApiClient.post("/api/ai/pitch", payload);
+        currentGeneratedPitch = res.pitch;
+        renderPitchPreview(currentGeneratedPitch);
+      } catch (err) {
+        pitchError.textContent = err.message || "Failed to generate story pitch.";
+        pitchError.style.display = "block";
+      } finally {
+        generatePitchBtn.disabled = false;
+        randomPitchBtn.disabled = false;
+        generatePitchBtn.textContent = "Generate Pitch";
+      }
+    }
+
+    function renderPitchPreview(pitch) {
+      if (!pitch) return;
+      previewTitle.textContent = pitch.title || "Untitled Concept";
+      previewLogline.textContent = `"${pitch.logline || ""}"`;
+      previewOverview.textContent = pitch.overview || "No detailed synopsis generated.";
+
+      previewCharacters.innerHTML = "";
+      if (Array.isArray(pitch.characters) && pitch.characters.length > 0) {
+        pitch.characters.forEach(c => {
+          const chip = document.createElement("div");
+          chip.className = "pitch-char-chip";
+          chip.innerHTML = `<strong>${escapeHtml(c.name)}</strong> (${escapeHtml(c.role || "Character")}): ${escapeHtml(c.notes || "")}`;
+          previewCharacters.appendChild(chip);
+        });
+      } else {
+        previewCharacters.innerHTML = `<span style="font-size: 0.8rem; color: var(--text-muted);">None seeded.</span>`;
+      }
+
+      pitchPreview.style.display = "block";
+    }
+
+    generatePitchBtn.addEventListener("click", () => triggerPitchGeneration(false));
+    randomPitchBtn.addEventListener("click", () => triggerPitchGeneration(true));
+    rerollPitchBtn.addEventListener("click", () => triggerPitchGeneration(false));
+
+    approvePitchBtn.addEventListener("click", async () => {
+      if (!currentGeneratedPitch) return;
+
+      approvePitchBtn.disabled = true;
+      approvePitchBtn.textContent = "Creating Novel...";
+
+      try {
+        await ApiClient.post("/api/novels", {
+          title: currentGeneratedPitch.title,
+          description: currentGeneratedPitch.logline,
+          overview: currentGeneratedPitch.overview,
+          characters: currentGeneratedPitch.characters || [],
+        });
+
+        pitchModal.classList.remove("active");
+        pitchPreview.style.display = "none";
+        currentGeneratedPitch = null;
+        loadNovels();
+      } catch (err) {
+        alert("Failed to initialize novel from pitch: " + err.message);
+      } finally {
+        approvePitchBtn.disabled = false;
+        approvePitchBtn.textContent = "✅ Approve & Create Novel";
+      }
+    });
+
+    // ==========================================
+    // Backup JSON Import Handler
+    // ==========================================
+    importNovelTriggerBtn.addEventListener("click", () => {
+      importNovelFileInput.value = "";
+      importNovelFileInput.click();
+    });
+
+    importNovelFileInput.addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const backupData = JSON.parse(text);
+
+        if (!backupData.novel || !backupData.novel.title) {
+          alert("Invalid backup file: Missing novel root structure.");
+          return;
+        }
+
+        const confirmed = confirm(`Import novel "${backupData.novel.title}" with ${backupData.chapters?.length || 0} chapters and ${backupData.characters?.length || 0} characters?`);
+        if (!confirmed) return;
+
+        importNovelTriggerBtn.disabled = true;
+        importNovelTriggerBtn.textContent = "Importing...";
+
+        await ApiClient.post("/api/novels/import", backupData);
+        alert("Novel imported successfully!");
+        loadNovels();
+      } catch (err) {
+        alert("Import failed: " + err.message);
+      } finally {
+        importNovelTriggerBtn.disabled = false;
+        importNovelTriggerBtn.textContent = "📥 Import Novel (.json)";
       }
     });
 
