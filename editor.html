@@ -166,6 +166,7 @@
       <span style="font-weight: 700;">Novel Body</span>
     </div>
     <div class="navbar-actions">
+      <button id="toggleReferenceDrawerBtn" class="btn btn-secondary btn-sm" title="Open Story Reference (Alt+R)">📚 Story Reference</button>
       <button id="toggleFindBtn" class="btn btn-secondary btn-sm" title="Search text (Ctrl+F)">🔍 Find</button>
       <button id="deleteChapterBtn" class="btn btn-danger btn-sm" title="Delete Active Chapter">Delete Chapter</button>
     </div>
@@ -215,10 +216,31 @@
     </main>
   </div>
 
+  <!-- Story Reference Sidebar Drawer -->
+  <aside id="referenceDrawer" class="reference-drawer" aria-label="Story Reference Drawer">
+    <div class="reference-header">
+      <div style="font-weight: 700; font-size: 0.95rem;">Story Reference</div>
+      <button id="closeReferenceDrawerBtn" class="btn btn-secondary btn-sm" type="button" aria-label="Close Reference Drawer">✕</button>
+    </div>
+
+    <div class="reference-tabs">
+      <button id="tabRefCharacters" class="reference-tab active" type="button">Characters</button>
+      <button id="tabRefTimeline" class="reference-tab" type="button">Timeline</button>
+    </div>
+
+    <div class="reference-search">
+      <input type="text" id="referenceSearchInput" placeholder="Filter references...">
+    </div>
+
+    <div id="referenceContent" class="reference-content">
+      <!-- Dynamic list of character cards or timeline events -->
+    </div>
+  </aside>
+
   <script src="./api-client.js"></script>
   <script src="./chatbot.js"></script>
   <script>
-    // Merged Editor UI & Robust Autosave Engine
+    // Merged Editor UI, Autosave Engine & Reference Drawer
     (function () {
       const novelId = ApiClient.getNovelId();
       if (!novelId) {
@@ -244,6 +266,14 @@
         findMatchCount: document.getElementById("findMatchCount"),
         findPrevBtn: document.getElementById("findPrevBtn"),
         findNextBtn: document.getElementById("findNextBtn"),
+        // Reference Drawer Elements
+        referenceDrawer: document.getElementById("referenceDrawer"),
+        toggleReferenceDrawerBtn: document.getElementById("toggleReferenceDrawerBtn"),
+        closeReferenceDrawerBtn: document.getElementById("closeReferenceDrawerBtn"),
+        tabRefCharacters: document.getElementById("tabRefCharacters"),
+        tabRefTimeline: document.getElementById("tabRefTimeline"),
+        referenceSearchInput: document.getElementById("referenceSearchInput"),
+        referenceContent: document.getElementById("referenceContent"),
       };
 
       elements.navBackDashboard.href = `./dashboard.html?id=${novelId}`;
@@ -254,6 +284,14 @@
       let isSavingInFlight = false;
       let searchMatches = [];
       let currentMatchIndex = -1;
+
+      // Reference drawer data cache
+      let referenceData = {
+        characters: [],
+        timeline: [],
+        activeTab: "characters",
+        loaded: false
+      };
 
       // Global reference for selection-aware AI prompts
       window.novalistaSelection = "";
@@ -548,14 +586,131 @@
         updateSelectionCache();
       }
 
-      // Keyboard shortcut Ctrl+F / Cmd+F inside editor
+      // ==========================================
+      // Story Reference Sidebar Functionality
+      // ==========================================
+      function toggleReferenceDrawer(show) {
+        const isOpen = elements.referenceDrawer.classList.contains("open");
+        const targetState = show !== undefined ? show : !isOpen;
+
+        if (targetState) {
+          elements.referenceDrawer.classList.add("open");
+          if (!referenceData.loaded) {
+            loadReferenceData();
+          } else {
+            renderReferenceContent();
+          }
+        } else {
+          elements.referenceDrawer.classList.remove("open");
+        }
+      }
+
+      async function loadReferenceData() {
+        elements.referenceContent.innerHTML = `<div class="reference-empty">Loading story references...</div>`;
+        try {
+          const [charRes, timeRes] = await Promise.all([
+            ApiClient.get(`/api/content?novelId=${novelId}&type=characters`),
+            ApiClient.get(`/api/content?novelId=${novelId}&type=timeline`)
+          ]);
+
+          referenceData.characters = charRes.items || [];
+          referenceData.timeline = (timeRes.items || []).sort((a, b) => (a.order || 0) - (b.order || 0));
+          referenceData.loaded = true;
+          renderReferenceContent();
+        } catch (err) {
+          console.error("Failed to load reference data:", err);
+          elements.referenceContent.innerHTML = `<div class="reference-empty" style="color: var(--accent-danger);">Failed to load references.</div>`;
+        }
+      }
+
+      function escapeHtml(str) {
+        const div = document.createElement("div");
+        div.textContent = str || "";
+        return div.innerHTML;
+      }
+
+      function renderReferenceContent() {
+        const query = elements.referenceSearchInput.value.trim().toLowerCase();
+        elements.referenceContent.innerHTML = "";
+
+        if (referenceData.activeTab === "characters") {
+          const filtered = referenceData.characters.filter(c =>
+            (c.name && c.name.toLowerCase().includes(query)) ||
+            (c.role && c.role.toLowerCase().includes(query)) ||
+            (c.notes && c.notes.toLowerCase().includes(query))
+          );
+
+          if (filtered.length === 0) {
+            elements.referenceContent.innerHTML = `<div class="reference-empty">No characters found.</div>`;
+            return;
+          }
+
+          filtered.forEach(c => {
+            const card = document.createElement("div");
+            card.className = "reference-card";
+            card.innerHTML = `
+              <div class="reference-card-title">${escapeHtml(c.name || "Unnamed Character")}</div>
+              ${c.role ? `<div class="reference-card-meta">${escapeHtml(c.role)}</div>` : ""}
+              ${c.notes ? `<div class="reference-card-body">${escapeHtml(c.notes)}</div>` : ""}
+            `;
+            elements.referenceContent.appendChild(card);
+          });
+        } else {
+          const filtered = referenceData.timeline.filter(t =>
+            (t.title && t.title.toLowerCase().includes(query)) ||
+            (t.date && t.date.toLowerCase().includes(query)) ||
+            (t.description && t.description.toLowerCase().includes(query))
+          );
+
+          if (filtered.length === 0) {
+            elements.referenceContent.innerHTML = `<div class="reference-empty">No timeline events found.</div>`;
+            return;
+          }
+
+          filtered.forEach(t => {
+            const card = document.createElement("div");
+            card.className = "reference-card";
+            card.innerHTML = `
+              <div class="reference-card-title">${escapeHtml(t.title || "Untitled Milestone")}</div>
+              ${t.date ? `<div class="reference-card-meta">📅 ${escapeHtml(t.date)}</div>` : ""}
+              ${t.description ? `<div class="reference-card-body">${escapeHtml(t.description)}</div>` : ""}
+            `;
+            elements.referenceContent.appendChild(card);
+          });
+        }
+      }
+
+      elements.tabRefCharacters.addEventListener("click", () => {
+        referenceData.activeTab = "characters";
+        elements.tabRefCharacters.classList.add("active");
+        elements.tabRefTimeline.classList.remove("active");
+        renderReferenceContent();
+      });
+
+      elements.tabRefTimeline.addEventListener("click", () => {
+        referenceData.activeTab = "timeline";
+        elements.tabRefTimeline.classList.add("active");
+        elements.tabRefCharacters.classList.remove("active");
+        renderReferenceContent();
+      });
+
+      elements.referenceSearchInput.addEventListener("input", renderReferenceContent);
+      elements.toggleReferenceDrawerBtn.addEventListener("click", () => toggleReferenceDrawer());
+      elements.closeReferenceDrawerBtn.addEventListener("click", () => toggleReferenceDrawer(false));
+
+      // Keyboard shortcuts
       window.addEventListener("keydown", (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
           e.preventDefault();
           toggleFind(true);
         }
-        if (e.key === "Escape" && elements.findBar.classList.contains("active")) {
-          toggleFind(false);
+        if (e.altKey && e.key.toLowerCase() === "r") {
+          e.preventDefault();
+          toggleReferenceDrawer();
+        }
+        if (e.key === "Escape") {
+          if (elements.findBar.classList.contains("active")) toggleFind(false);
+          if (elements.referenceDrawer.classList.contains("open")) toggleReferenceDrawer(false);
         }
       });
 
